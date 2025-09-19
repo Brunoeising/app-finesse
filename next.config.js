@@ -11,6 +11,7 @@ const nextConfig = {
     output: 'export',
     trailingSlash: true,
     distDir: 'out',
+    // Removido assetPrefix aqui - será tratado de forma diferente
   }),
   
   images: {
@@ -30,50 +31,55 @@ const nextConfig = {
         tls: false,
         crypto: false,
       };
+      
+      // Para build de extensão, ajustar publicPath
+      if (isExtensionBuild) {
+        config.output.publicPath = './';
+      }
     }
 
     return config;
   },
 };
 
-// Adicionar proxy apenas em desenvolvimento (não para extensão)
+// Adicionar rewrites e headers apenas em desenvolvimento (não para extensão)
 if (!isExtensionBuild) {
-  nextConfig.async = {
-    rewrites: async () => [
-      {
-        source: '/api/finesse/:path*',
-        destination: 'https://sncfinesse1.totvs.com.br:8445/finesse/api/:path*',
-      },
-      {
-        source: '/api/finesse2/:path*',
-        destination: 'https://sncfinesse2.totvs.com.br:8445/finesse/api/:path*',
-      }
-    ],
-    
-    headers: async () => [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-        ],
-      },
-    ],
-  };
+  // Rewrites para proxy API
+  nextConfig.rewrites = async () => [
+    {
+      source: '/api/finesse/:path*',
+      destination: 'https://sncfinesse1.totvs.com.br:8445/finesse/api/:path*',
+    },
+    {
+      source: '/api/finesse2/:path*',
+      destination: 'https://sncfinesse2.totvs.com.br:8445/finesse/api/:path*',
+    }
+  ];
+  
+  // Headers de segurança
+  nextConfig.headers = async () => [
+    {
+      source: '/(.*)',
+      headers: [
+        {
+          key: 'X-Frame-Options',
+          value: 'DENY',
+        },
+        {
+          key: 'X-Content-Type-Options',
+          value: 'nosniff',
+        },
+        {
+          key: 'Referrer-Policy',
+          value: 'strict-origin-when-cross-origin',
+        },
+        {
+          key: 'X-XSS-Protection',
+          value: '1; mode=block',
+        },
+      ],
+    },
+  ];
 }
 
 module.exports = nextConfig;
