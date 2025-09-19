@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition-colors duration-200;
+  }
+  
+  .btn-success {
+    @apply bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition-colors duration-200;
+  }
+  
+  .btn-danger {
+    @apply bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition-colors duration-200;
+  }
+  
+  .card {
+    @apply bg-white shadow-lg rounded-lg p-6 mb-6 transition-shadow duration-300 hover:shadow-xl;
+  }
+  
+  .status-indicator {
+    @apply w-4 h-4 rounded-full mr-3 transition-colors duration-300;
+  }
+  
+  .status-ready {
+    @apply bg-green-500;
+  }
+  
+  .status-not-ready {
+    @apply bg-red-500;
+  }
+  
+  .status-paused {
+    @apply bg-yellow-500;
+  }
+  
+  .status-unknown {
+    @apply bg-gray-500;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .gradient-bg {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+}
+
+/* Customização para extensão do Chrome */
+@media (max-width: 400px) {
+  .card {
+    @apply p-4 mb-4;
+  }
+  
+  .btn-primary, .btn-secondary, .btn-success, .btn-danger {
+    @apply py-1 px-3 text-sm;
+  }
+}
+
+/* Estilização personalizada para toggle switches */
+.toggle-switch {
+  @apply relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+.toggle-switch.enabled {
+  @apply bg-blue-600;
+}
+
+.toggle-switch.disabled {
+  @apply bg-gray-200;
+}
+
+.toggle-indicator {
+  @apply pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out;
+}
+
+.toggle-indicator.enabled {
+  @apply translate-x-5;
+}
+
+.toggle-indicator.disabled {
+  @apply translate-x-0;
+}
