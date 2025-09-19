@@ -1,0 +1,4 @@
+// Extracted script 5
+try {
+self.__next_f.push([1,"9:[[\"$\",\"meta\",\"0\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}],[\"$\",\"meta\",\"1\",{\"name\":\"theme-color\",\"content\":\"#2563eb\"}],[\"$\",\"meta\",\"2\",{\"charSet\":\"utf-8\"}],[\"$\",\"title\",\"3\",{\"children\":\"Finesse Notifier\"}],[\"$\",\"meta\",\"4\",{\"name\":\"description\",\"content\":\"Sistema de monitoramento para Cisco Finesse com notificações inteligentes\"}],[\"$\",\"link\",\"5\",{\"rel\":\"manifest\",\"href\":\"/manifest.json\",\"crossOrigin\":\"use-credentials\"}],[\"$\",\"link\",\"6\",{\"rel\":\"icon\",\"href\":\"/favicon.ico\",\"type\":\"image/x-icon\",\"sizes\":\"16x16\"}],[\"$\",\"meta\",\"7\",{\"name\":\"next-size-adjust\"}]]\n4:null\n"])
+} catch(e) { console.warn('Script 5 failed:', e); }
