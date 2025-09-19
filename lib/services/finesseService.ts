@@ -1,5 +1,6 @@
 // lib/services/finesseService.ts
 import { FinesseApiResponse, UserCredentials, ApiResponse } from '@/types/finesse';
+import { DEFAULT_REASON_CODES, getReasonCodesWithFallback } from '@/lib/constants/reasonCodes';
 
 interface ReasonCode {
   id: { text: string };
@@ -373,6 +374,8 @@ class FinesseService {
       return { success: false, error: validation.error };
     }
 
+    console.log('Tentando obter códigos de motivo...');
+
     const { username, password } = credentials;
     const authHeader = this.createAuthHeader(username, password);
 
@@ -381,7 +384,17 @@ class FinesseService {
     
     // Se falhou, tentar servidor de fallback
     if (!response.success && this.fallbackUrl !== this.baseUrl) {
+      console.log('Tentando códigos de motivo no servidor de fallback...');
       response = await this.tryGetReasonCodes(this.fallbackUrl, authHeader);
+    }
+
+    // Se ambos falharam (CORS/403), usar códigos padrão
+    if (!response.success) {
+      console.log('API falhou - usando códigos de motivo padrão');
+      return {
+        success: true,
+        data: DEFAULT_REASON_CODES
+      };
     }
 
     return response;

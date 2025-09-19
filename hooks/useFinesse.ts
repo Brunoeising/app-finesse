@@ -39,7 +39,7 @@ export const useFinesse = (): UseFinesseReturn => {
   const [credentials, setCredentials] = useState<UserCredentials | null>(null);
   const [isFinesseOpen, setIsFinesseOpen] = useState<boolean>(true);
   const [isAccountLocked, setIsAccountLocked] = useState<boolean>(false);
-  const [remainingAttempts, setRemainingAttempts] = useState<number>(3);
+  const [remainingAttempts, setRemainingAttempts] = useState<number>(10);
 
   // Configurações
   const [timerSettings, setTimerSettings] = useState<TimerSettings>({
@@ -59,7 +59,8 @@ export const useFinesse = (): UseFinesseReturn => {
   // Refs para controle de timers
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const pauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const statusCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const realtimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastStatusRef = useRef<string | null>(null);
 
   // Verificação de status em tempo real
   const checkAgentStatus = useCallback(async (creds?: UserCredentials, showLoading = false) => {
@@ -82,19 +83,28 @@ export const useFinesse = (): UseFinesseReturn => {
       const response = await finesseService.connectApi(currentCredentials);
       
       if (response.success && response.data) {
-        setAgentStatus(response.data);
+        const newStatus = response.data;
+        setAgentStatus(newStatus);
         setIsConnected(true);
         setError(null);
-        await storageService.saveAgentStatus(response.data);
+        await storageService.saveAgentStatus(newStatus);
         
-        // Verificar condições para notificações
-        await handleStatusNotifications(response.data);
+        // Verificar condições para notificações apenas se o status mudou
+        const currentReasonCode = newStatus.reasonCodeId ? newStatus.reasonCodeId.text : null;
+        const currentState = newStatus.state ? newStatus.state.text : null;
+        const statusKey = `${currentState}_${currentReasonCode}`;
+        
+        if (lastStatusRef.current !== statusKey) {
+          console.log(`Status mudou de ${lastStatusRef.current} para ${statusKey}`);
+          lastStatusRef.current = statusKey;
+          await handleStatusNotifications(newStatus);
+        }
       } else {
         setIsConnected(false);
         setError(response.error || 'Erro na conexão com Finesse');
         
         // Notificar sobre erro de conexão apenas se estiver monitorando
-        if (shouldMonitor) {
+        if (shouldMonitor && scheduleService.isWithinWorkingHours(scheduleSettings)) {
           await sendNotification(NotificationType.DEVICE_ERROR);
         }
       }
@@ -112,28 +122,39 @@ export const useFinesse = (): UseFinesseReturn => {
     const reasonCodeId = status.reasonCodeId ? parseInt(status.reasonCodeId.text) : null;
     const finesseState = status.state ? status.state.text : null;
 
+    console.log(`Analisando status para notificações: State=${finesseState}, ReasonCode=${reasonCodeId}`);
+
     // Verificar se deve notificar baseado no horário
-    if (!scheduleService.shouldMonitor(isFinesseOpen, scheduleSettings)) {
+    if (!scheduleService.isWithinWorkingHours(scheduleSettings)) {
+      console.log('Fora do horário de trabalho - notificações suspensas');
       return;
     }
 
+    // Parar timers anteriores
+    stopStatusCheck();
+
     if (reasonCodeId === -1) {
+      console.log('Status NOT_READY detectado - enviando notificação');
       await sendNotification(NotificationType.NOT_READY);
       await focusFinesseTab();
-    } else if (reasonCodeId && reasonCodeId > 0 && reasonCodeId < 50) {
-      // Parar verificações e iniciar contador de pausa
-      stopStatusCheck();
-      const countTimer = (timerSettings.pauseTimer - timerSettings.standardTimer) * 60000;
+    } else if (reasonCodeId && reasonCodeId > 0) {
+      console.log(`Pausa detectada com código ${reasonCodeId} - iniciando timer de pausa`);
+      // Iniciar timer de pausa
+      const pauseTimer = timerSettings.pauseTimer * 60 * 1000; // converter para ms
       
       pauseTimeoutRef.current = setTimeout(async () => {
+        console.log(`Timer de pausa expirou após ${timerSettings.pauseTimer} minutos`);
         await sendNotification(NotificationType.TIME_EXCEEDED, timerSettings.pauseTimer);
         await focusFinesseTab();
-        startStatusCheck();
-      }, countTimer);
+      }, pauseTimer);
     } else if (finesseState === "NOT_READY") {
+      console.log('Status NOT_READY genérico detectado');
       await sendNotification(NotificationType.NOT_READY);
       await focusFinesseTab();
     }
+
+    // Sempre reiniciar o monitoramento regular
+    startRealtimeCheck();
   };
 
   // Envio de notificações
@@ -145,6 +166,8 @@ export const useFinesse = (): UseFinesseReturn => {
       timestamp: new Date(),
       agentId: credentials?.agentId,
     };
+
+    console.log(`Enviando notificação: ${message}`);
 
     try {
       if (notificationConfig.windowsNotification) {
@@ -171,6 +194,20 @@ export const useFinesse = (): UseFinesseReturn => {
     }
   };
 
+  // Monitoramento em tempo real (mais frequente)
+  const startRealtimeCheck = useCallback(() => {
+    if (realtimeIntervalRef.current) {
+      clearInterval(realtimeIntervalRef.current);
+    }
+
+    // Verificação em tempo real a cada 60 segundos
+    realtimeIntervalRef.current = setInterval(() => {
+      checkAgentStatus();
+    }, 60000);
+
+    console.log('Monitoramento em tempo real iniciado 60s)');
+  }, [checkAgentStatus]);
+
   // Controle de verificações automáticas
   const startStatusCheck = useCallback(() => {
     stopStatusCheck();
@@ -178,16 +215,16 @@ export const useFinesse = (): UseFinesseReturn => {
     // Verificação inicial imediata
     checkAgentStatus();
 
-    // Configurar verificação periódica
+    // Configurar verificação periódica principal
     intervalRef.current = setInterval(() => {
       checkAgentStatus();
     }, timerSettings.standardTimer * 60 * 1000);
 
-    // Verificação mais rápida para tempo real (a cada 30 segundos)
-    statusCheckRef.current = setInterval(() => {
-      checkAgentStatus();
-    }, 30000);
-  }, [checkAgentStatus, timerSettings.standardTimer]);
+    // Iniciar também o monitoramento em tempo real
+    startRealtimeCheck();
+
+    console.log(`Monitoramento iniciado - Timer principal: ${timerSettings.standardTimer}min`);
+  }, [checkAgentStatus, timerSettings.standardTimer, startRealtimeCheck]);
 
   const stopStatusCheck = useCallback(() => {
     if (intervalRef.current) {
@@ -198,10 +235,11 @@ export const useFinesse = (): UseFinesseReturn => {
       clearTimeout(pauseTimeoutRef.current);
       pauseTimeoutRef.current = null;
     }
-    if (statusCheckRef.current) {
-      clearInterval(statusCheckRef.current);
-      statusCheckRef.current = null;
+    if (realtimeIntervalRef.current) {
+      clearInterval(realtimeIntervalRef.current);
+      realtimeIntervalRef.current = null;
     }
+    console.log('Monitoramento parado');
   }, []);
 
   // Login com validações de segurança
@@ -233,7 +271,12 @@ export const useFinesse = (): UseFinesseReturn => {
         setAgentStatus(response.data);
         setIsConnected(true);
         setIsAccountLocked(false);
-        setRemainingAttempts(3);
+        setRemainingAttempts(10);
+        
+        // Inicializar status de referência
+        const currentReasonCode = response.data.reasonCodeId ? response.data.reasonCodeId.text : null;
+        const currentState = response.data.state ? response.data.state.text : null;
+        lastStatusRef.current = `${currentState}_${currentReasonCode}`;
         
         startStatusCheck();
         return true;
@@ -271,7 +314,8 @@ export const useFinesse = (): UseFinesseReturn => {
     setIsConnected(false);
     setError(null);
     setIsAccountLocked(false);
-    setRemainingAttempts(3);
+    setRemainingAttempts(10);
+    lastStatusRef.current = null;
   };
 
   // Alteração de estado do agente
@@ -283,8 +327,13 @@ export const useFinesse = (): UseFinesseReturn => {
       const response = await finesseService.changeAgentState(credentials, state, reasonCodeId);
       
       if (response.success) {
-        // Atualizar status imediatamente
-        await checkAgentStatus(credentials);
+        console.log(`Estado alterado para ${state} ${reasonCodeId ? `com código ${reasonCodeId}` : ''}`);
+        
+        // Atualizar status imediatamente e forçar uma nova verificação
+        setTimeout(async () => {
+          await checkAgentStatus(credentials);
+        }, 1000); // Aguardar 1 segundo para o servidor processar
+        
         return true;
       } else {
         setError(response.error || 'Erro ao alterar status');
@@ -313,6 +362,7 @@ export const useFinesse = (): UseFinesseReturn => {
 
   // Atualizações de configurações
   const updateTimerSettings = async (settings: TimerSettings): Promise<boolean> => {
+    console.log(`Atualizando configurações de timer: ${settings.standardTimer}min / ${settings.pauseTimer}min`);
     const success = await storageService.saveTimerSettings(settings);
     if (success) {
       setTimerSettings(settings);
@@ -337,6 +387,7 @@ export const useFinesse = (): UseFinesseReturn => {
     const success = await storageService.saveScheduleSettings(settings);
     if (success) {
       setScheduleSettings(settings);
+      console.log('Configurações de horário atualizadas:', settings);
     }
     return success;
   };
@@ -401,6 +452,12 @@ export const useFinesse = (): UseFinesseReturn => {
           setScheduleSettings(savedScheduleSettings);
         }
 
+        console.log('Configurações carregadas:', {
+          timer: savedTimerSettings,
+          schedule: savedScheduleSettings,
+          notifications: savedNotificationConfig
+        });
+
         // Se há credenciais salvas, tentar reconectar
         if (savedCredentials) {
           // Verificar se conta não está bloqueada
@@ -433,6 +490,7 @@ export const useFinesse = (): UseFinesseReturn => {
   // Reiniciar monitoramento quando configurações mudam
   useEffect(() => {
     if (isConnected && credentials) {
+      console.log('Reiniciando monitoramento devido a mudança de configurações');
       stopStatusCheck();
       setTimeout(startStatusCheck, 1000);
     }

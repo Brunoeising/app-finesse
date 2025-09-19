@@ -104,7 +104,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               id="agentId"
               name="agentId"
               type="text"
-              placeholder="80590269 ou 80.590.269"
+              placeholder="80.590.269"
               value={formData.agentId}
               onChange={handleInputChange}
               disabled={isLoading || isAccountLocked}
@@ -211,7 +211,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           <h5 className="text-sm font-medium text-blue-900 mb-2">Dicas importantes:</h5>
           <ul className="text-sm text-blue-700 space-y-1">
             <li>• Use suas credenciais normais do Finesse</li>
-            <li>• Agent ID pode ser com ou sem pontos (ex: 80590269)</li>
+            <li>• Agent ID deve ser com ou pontos (ex: 80.590.269)</li>
             <li>• Verifique se está conectado na VPN</li>
             <li>• Certifique-se que o Jabber está funcionando</li>
           </ul>
