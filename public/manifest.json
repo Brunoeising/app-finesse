@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Finesse Notifier",
+  "version": "2.0.0",
+  "description": "Sistema de monitoramento para Cisco Finesse com notificações inteligentes",
+  "permissions": [
+    "storage",
+    "tabs",
+    "notifications",
+    "activeTab",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://sncfinesse1.totvs.com.br/*",
+    "https://sncfinesse2.totvs.com.br/*",
+    "https://chat.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Finesse Notifier",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://sncfinesse1.totvs.com.br https://sncfinesse2.totvs.com.br https://chat.googleapis.com;"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*", "_next/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

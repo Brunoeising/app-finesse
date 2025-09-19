@@ -11,7 +11,7 @@ class FinesseService {
   private baseUrl: string;
   private fallbackUrl: string;
   private allowedDomains: string[];
-  private requestTimeout: number = 5000;
+  private requestTimeout: number = 10000; // Aumentado para 10 segundos
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_FINESSE_URL_PRIMARY || '';
@@ -86,10 +86,6 @@ class FinesseService {
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/xml',
-          ...options.headers,
-        }
       });
 
       clearTimeout(timeoutId);
@@ -194,11 +190,14 @@ class FinesseService {
     const { username, password, agentId } = credentials;
     const authHeader = this.createAuthHeader(username, password);
 
+    console.log('Tentando conectar com Finesse...');
+
     // Tentar servidor principal primeiro
     let response = await this.tryConnection(this.baseUrl, agentId, authHeader);
     
     // Se falhou, tentar servidor de fallback
     if (!response.success && this.fallbackUrl !== this.baseUrl) {
+      console.log('Tentando servidor de fallback...');
       response = await this.tryConnection(this.fallbackUrl, agentId, authHeader);
     }
 
@@ -214,20 +213,30 @@ class FinesseService {
     authHeader: string
   ): Promise<ApiResponse<FinesseApiResponse>> {
     try {
-      const url = `${baseUrl}/User/${agentId}/`;
+      // IMPORTANTE: Remover pontos do Agent ID para a URL
+      const cleanAgentId = agentId.replace(/\./g, '');
+      const url = `${baseUrl}/User/${cleanAgentId}/`;
       
+      console.log(`Conectando com: ${url}`);
+
       const response = await this.makeRequest(url, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${authHeader}`,
+          'Accept': 'application/xml',
+          // REMOVIDO: Content-Type não deve ser usado em requisições GET
         },
       });
 
+      console.log(`Status da resposta: ${response.status}`);
+
       if (!response.ok) {
         if (response.status === 401) {
-          return { success: false, error: 'Credenciais inválidas' };
+          return { success: false, error: 'Credenciais inválidas ou não autorizadas' };
         } else if (response.status === 404) {
-          return { success: false, error: 'Agent ID não encontrado' };
+          return { success: false, error: 'Agent ID não encontrado no sistema' };
+        } else if (response.status === 415) {
+          return { success: false, error: 'Erro de configuração do servidor (415)' };
         } else {
           return { success: false, error: `Erro do servidor: ${response.status}` };
         }
@@ -239,6 +248,8 @@ class FinesseService {
         return { success: false, error: 'Resposta vazia do servidor' };
       }
 
+      console.log('XML recebido:', xmlData.substring(0, 200) + '...');
+
       const finesse = this.parseXmlToJson(xmlData);
 
       // Verificar se a resposta contém erro
@@ -249,6 +260,7 @@ class FinesseService {
         };
       }
 
+      console.log('Conexão bem-sucedida!');
       return { success: true, data: finesse };
 
     } catch (error) {
@@ -307,13 +319,16 @@ class FinesseService {
     stateXml: string
   ): Promise<ApiResponse<any>> {
     try {
-      const url = `${baseUrl}/User/${agentId}/`;
+      // IMPORTANTE: Remover pontos do Agent ID para a URL
+      const cleanAgentId = agentId.replace(/\./g, '');
+      const url = `${baseUrl}/User/${cleanAgentId}/`;
 
       const response = await this.makeRequest(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${authHeader}`,
-          'Content-Type': 'application/xml',
+          'Content-Type': 'application/xml', // Content-Type é apropriado para PUT/POST
+          'Accept': 'application/xml',
         },
         body: stateXml,
       });
@@ -386,6 +401,8 @@ class FinesseService {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${authHeader}`,
+          'Accept': 'application/xml',
+          // REMOVIDO: Content-Type não deve ser usado em GET
         },
       });
 
