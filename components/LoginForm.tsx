@@ -198,13 +198,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           </div>
         </form>
 
-        {/* Debug info - remover em produção */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 p-3 bg-gray-100 border rounded text-xs">
-            <p><strong>Debug Info:</strong></p>
-            <p>Agent ID será enviado como: {formData.agentId.replace(/\./g, '')}</p>
-          </div>
-        )}
 
         {/* Informações */}
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-md p-4">

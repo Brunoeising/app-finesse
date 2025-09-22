@@ -1,110 +1,68 @@
-// scripts/build-extension-improved.js
+// scripts/build-extension-nextjs.js
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { execSync } = require('child_process');
 
 const BUILD_DIR = 'out';
 const EXTENSION_DIR = 'extension-build';
 
-async function buildExtension() {
-  console.log('🚀 Iniciando build da extensão...');
+console.log('🚀 Iniciando build Next.js para extensão Chrome...\n');
 
-  try {
-    // 1. Limpar TUDO primeiro
-    console.log('🧹 Limpeza completa...');
-    await forceClean();
-
-    // 2. Build do Next.js para extensão
-    console.log('⚡ Executando build do Next.js...');
-    process.env.BUILD_TARGET = 'extension';
-    
-    await executeCommand('npm run build');
-
-    // 3. Verificar se build foi criado
-    if (!fs.existsSync(BUILD_DIR)) {
-      throw new Error('Build do Next.js falhou - pasta out não foi criada');
-    }
-
-    // 4. Criar diretório da extensão
-    fs.mkdirSync(EXTENSION_DIR, { recursive: true });
-
-    // 5. Copiar arquivos do build
-    console.log('📁 Copiando arquivos...');
-    copyDirectory(BUILD_DIR, EXTENSION_DIR);
-
-    // 6. Renomear _next para next
-    console.log('🔄 Renomeando _next para next...');
-    await renameNextDirectory();
-
-    // 7. Copiar arquivos específicos da extensão
-    console.log('📋 Copiando arquivos da extensão...');
-    await copyExtensionFiles();
-
-    // 8. Corrigir TODAS as referências _next
-    console.log('🔧 Corrigindo referências _next...');
-    await fixAllNextReferences();
-
-    // 9. Processar e limpar HTML completamente
-    console.log('🧽 Limpando HTML...');
-    await cleanHtmlCompletely();
-
-    // 10. Remover preload tags
-    console.log('🔗 Removendo preload tags...');
-    await removePreloadTags();
-
-    // 11. Debug e validação final
-    console.log('🔍 Validação final...');
-    await debugValidation();
-
-    console.log('✅ Build concluído!');
-    console.log(`📦 Arquivos em: ${EXTENSION_DIR}/`);
-    console.log('\n📝 Próximos passos:');
-    console.log('1. Abra chrome://extensions/');
-    console.log('2. Ative o "Modo do desenvolvedor"');
-    console.log('3. Clique em "Carregar sem compactação"');
-    console.log(`4. Selecione a pasta: ${path.resolve(EXTENSION_DIR)}`);
-
-  } catch (error) {
-    console.error('❌ Erro:', error.message);
-    process.exit(1);
+// 1. Limpar diretórios anteriores
+console.log('🧹 Limpando builds anteriores...');
+[BUILD_DIR, EXTENSION_DIR, '.next'].forEach(dir => {
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    console.log(`  ✓ ${dir} removido`);
   }
+});
+
+// 2. Criar arquivo .env.local se não existir
+console.log('\n📝 Configurando variáveis de ambiente...');
+const envContent = `
+NEXT_PUBLIC_FINESSE_URL_PRIMARY=https://sncfinesse1.totvs.com.br:8445/finesse/api
+NEXT_PUBLIC_FINESSE_URL_FALLBACK=https://sncfinesse2.totvs.com.br:8445/finesse/api
+NEXT_PUBLIC_ALLOWED_EMAIL_DOMAINS=@jv01.local,@totvs.com.br
+NEXT_PUBLIC_ALLOWED_WEBHOOK_DOMAIN=chat.googleapis.com
+NEXT_PUBLIC_DEFAULT_STANDARD_TIMER=5
+NEXT_PUBLIC_DEFAULT_PAUSE_TIMER=30
+NEXT_PUBLIC_MIN_TIMER_MINUTES=1
+NEXT_PUBLIC_MAX_TIMER_MINUTES=120
+NEXT_PUBLIC_MAX_LOGIN_ATTEMPTS=10
+NEXT_PUBLIC_LOCKOUT_DURATION=15
+NEXT_PUBLIC_SESSION_TIMEOUT=480
+NEXT_PUBLIC_ENCRYPTION_KEY=your-secret-key-here-change-this
+`.trim();
+
+if (!fs.existsSync('.env.local')) {
+  fs.writeFileSync('.env.local', envContent);
+  console.log('  ✓ .env.local criado');
+} else {
+  console.log('  ✓ .env.local já existe');
 }
 
-async function forceClean() {
-  const dirsToClean = [BUILD_DIR, EXTENSION_DIR, '.next'];
-  
-  for (const dir of dirsToClean) {
-    if (fs.existsSync(dir)) {
-      console.log(`  Removendo ${dir}...`);
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  }
-  
-  // Aguardar um pouco para garantir que foi limpo
-  await new Promise(resolve => setTimeout(resolve, 1000));
+// 3. Build do Next.js
+console.log('\n⚡ Executando build do Next.js...');
+try {
+  execSync('BUILD_TARGET=extension npm run build', { stdio: 'inherit' });
+  console.log('  ✓ Build Next.js concluído');
+} catch (error) {
+  console.error('❌ Erro no build do Next.js');
+  process.exit(1);
 }
 
-function executeCommand(command) {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      console.log(stdout);
-      if (stderr) console.error(stderr);
-      resolve();
-    });
-  });
+// 4. Verificar se o build foi criado
+if (!fs.existsSync(BUILD_DIR)) {
+  console.error('❌ Pasta out não foi criada');
+  process.exit(1);
 }
 
-function copyDirectory(src, dest) {
-  if (!fs.existsSync(src)) {
-    throw new Error(`Pasta fonte não existe: ${src}`);
-  }
+// 5. Copiar build para extension-build
+console.log('\n📂 Copiando arquivos...');
+function copyRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
   
   fs.mkdirSync(dest, { recursive: true });
-  
   const entries = fs.readdirSync(src, { withFileTypes: true });
   
   for (const entry of entries) {
@@ -112,270 +70,294 @@ function copyDirectory(src, dest) {
     const destPath = path.join(dest, entry.name);
     
     if (entry.isDirectory()) {
-      copyDirectory(srcPath, destPath);
+      copyRecursive(srcPath, destPath);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
   }
 }
 
-async function renameNextDirectory() {
-  const nextDirOld = path.join(EXTENSION_DIR, '_next');
-  const nextDirNew = path.join(EXTENSION_DIR, 'next');
-  
-  if (fs.existsSync(nextDirOld)) {
-    if (fs.existsSync(nextDirNew)) {
-      fs.rmSync(nextDirNew, { recursive: true });
-    }
-    fs.renameSync(nextDirOld, nextDirNew);
-    console.log('  ✅ _next renomeado para next');
-  } else {
-    console.warn('  ⚠️ Pasta _next não encontrada');
+copyRecursive(BUILD_DIR, EXTENSION_DIR);
+console.log('  ✓ Arquivos copiados');
+
+// 6. Renomear _next para next
+console.log('\n🔄 Ajustando estrutura de pastas...');
+const oldNextPath = path.join(EXTENSION_DIR, '_next');
+const newNextPath = path.join(EXTENSION_DIR, 'next');
+
+if (fs.existsSync(oldNextPath)) {
+  if (fs.existsSync(newNextPath)) {
+    fs.rmSync(newNextPath, { recursive: true });
   }
+  fs.renameSync(oldNextPath, newNextPath);
+  console.log('  ✓ _next renomeado para next');
 }
 
-async function copyExtensionFiles() {
-  // Verificar se arquivos existem
-  const files = [
-    { src: 'public/manifest.json', dest: 'manifest.json' },
-    { src: 'public/background.js', dest: 'background.js' }
-  ];
-  
-  for (const file of files) {
-    const srcPath = file.src;
-    const destPath = path.join(EXTENSION_DIR, file.dest);
-    
-    if (!fs.existsSync(srcPath)) {
-      throw new Error(`Arquivo obrigatório não encontrado: ${srcPath}`);
-    }
-    
-    fs.copyFileSync(srcPath, destPath);
-    console.log(`  ✅ Copiado: ${file.dest}`);
-  }
-  
-  // Copiar icons
-  const iconsDir = 'public/icons';
-  if (fs.existsSync(iconsDir)) {
-    copyDirectory(iconsDir, path.join(EXTENSION_DIR, 'icons'));
-    console.log('  ✅ Ícones copiados');
-  } else {
-    console.warn('  ⚠️ Pasta de ícones não encontrada');
-  }
-}
-
-async function fixAllNextReferences() {
-  const filesToFix = [];
-  findFiles(EXTENSION_DIR, ['.html', '.js', '.css'], filesToFix);
-  
-  let totalFixed = 0;
-  
-  for (const filePath of filesToFix) {
-    try {
-      let content = fs.readFileSync(filePath, 'utf8');
-      const originalContent = content;
-      
-      // Substituir TODAS as referências _next por next
-      content = content.replace(/_next\//g, 'next/');
-      content = content.replace(/\.\/_next\//g, './next/');
-      content = content.replace(/\/_next\//g, '/next/');
-      content = content.replace(/"_next\//g, '"next/');
-      content = content.replace(/'_next\//g, "'next/");
-      
-      if (content !== originalContent) {
-        fs.writeFileSync(filePath, content);
-        totalFixed++;
-        console.log(`  ✅ Corrigido: ${path.relative(EXTENSION_DIR, filePath)}`);
-      }
-    } catch (error) {
-      console.warn(`  ⚠️ Erro ao processar ${filePath}: ${error.message}`);
-    }
-  }
-  
-  console.log(`  ✅ ${totalFixed} arquivos corrigidos`);
-}
-
-async function cleanHtmlCompletely() {
-  const indexPath = path.join(EXTENSION_DIR, 'index.html');
-  
-  if (!fs.existsSync(indexPath)) {
-    throw new Error('index.html não encontrado');
-  }
-
-  let content = fs.readFileSync(indexPath, 'utf8');
-  let scriptCounter = 0;
-  
-  console.log('  📄 Tamanho original do HTML:', content.length);
-  
-  // REMOVER COMPLETAMENTE todos os scripts inline
-  content = content.replace(/<script[^>]*>[\s\S]*?<\/script>/g, (match) => {
-    // Se é um script src externo, manter
-    if (match.includes('src=')) {
-      return match;
-    }
-    
-    // Se é script inline, extrair para arquivo
-    const scriptContent = match.replace(/<script[^>]*>|<\/script>/g, '').trim();
-    
-    if (scriptContent) {
-      scriptCounter++;
-      const scriptFileName = `extracted-${scriptCounter}.js`;
-      const scriptPath = path.join(EXTENSION_DIR, scriptFileName);
-      
-      // Salvar script em arquivo externo
-      const safeScript = `// Extracted script ${scriptCounter}\ntry {\n${scriptContent}\n} catch(e) { console.warn('Script ${scriptCounter} failed:', e); }`;
-      fs.writeFileSync(scriptPath, safeScript);
-      
-      console.log(`  📝 Script extraído: ${scriptFileName}`);
-      return `<script src="./${scriptFileName}"></script>`;
-    }
-    
-    return '';
-  });
-  
-  // Remover qualquer CSP do HTML
-  content = content.replace(/<meta[^>]*http-equiv[^>]*Content-Security-Policy[^>]*>/gi, '');
-  
-  // Remover scripts vazios
-  content = content.replace(/<script[^>]*><\/script>/g, '');
-  
-  fs.writeFileSync(indexPath, content);
-  console.log(`  ✅ ${scriptCounter} scripts extraídos, HTML limpo`);
-}
-
-async function removePreloadTags() {
-  const htmlFiles = [];
-  findFiles(EXTENSION_DIR, ['.html'], htmlFiles);
-  
-  let totalRemoved = 0;
-  
-  for (const filePath of htmlFiles) {
-    try {
-      let content = fs.readFileSync(filePath, 'utf8');
-      const originalContent = content;
-      
-      // Remover todas as tags de preload
-      content = content.replace(/<link[^>]*rel=['"]?preload['"]?[^>]*>/gi, '');
-      content = content.replace(/<link[^>]*rel=['"]?prefetch['"]?[^>]*>/gi, '');
-      content = content.replace(/<link[^>]*rel=['"]?modulepreload['"]?[^>]*>/gi, '');
-      
-      // Remover preloads específicos do webpack
-      content = content.replace(/<link[^>]*href=['"][^'"]*webpack[^'"]*['"][^>]*rel=['"]?preload['"]?[^>]*>/gi, '');
-      
-      if (content !== originalContent) {
-        fs.writeFileSync(filePath, content);
-        totalRemoved++;
-        console.log(`  ✅ Preload removido de: ${path.relative(EXTENSION_DIR, filePath)}`);
-      }
-    } catch (error) {
-      console.warn(`  ⚠️ Erro ao processar ${filePath}: ${error.message}`);
-    }
-  }
-  
-  if (totalRemoved > 0) {
-    console.log(`  ✅ ${totalRemoved} arquivos limpos de preload`);
-  } else {
-    console.log('  ✅ Nenhuma tag preload encontrada');
-  }
-}
-
-function findFiles(dir, extensions, fileList = []) {
-  if (!fs.existsSync(dir)) return fileList;
-  
+// 7. Corrigir todos os caminhos nos arquivos
+console.log('\n🔧 Corrigindo caminhos...');
+function fixPaths(dir) {
   const files = fs.readdirSync(dir, { withFileTypes: true });
+  let count = 0;
   
   for (const file of files) {
     const filePath = path.join(dir, file.name);
     
     if (file.isDirectory()) {
-      findFiles(filePath, extensions, fileList);
-    } else {
-      const ext = path.extname(file.name).toLowerCase();
-      if (extensions.includes(ext)) {
-        fileList.push(filePath);
+      count += fixPaths(filePath);
+    } else if (file.name.endsWith('.html') || file.name.endsWith('.js') || file.name.endsWith('.css')) {
+      let content = fs.readFileSync(filePath, 'utf8');
+      const original = content;
+      
+      // Corrigir referências a _next
+      content = content.replace(/_next\//g, 'next/');
+      content = content.replace(/\/_next\//g, '/next/');
+      
+      // Corrigir paths absolutos para relativos
+      content = content.replace(/href="\//g, 'href="');
+      content = content.replace(/src="\//g, 'src="');
+      
+      // Corrigir importações de módulos
+      content = content.replace(/from"\//g, 'from"');
+      content = content.replace(/import"\//g, 'import"');
+      
+      if (content !== original) {
+        fs.writeFileSync(filePath, content);
+        count++;
       }
     }
   }
   
-  return fileList;
+  return count;
 }
 
-async function debugValidation() {
-  const manifestPath = path.join(EXTENSION_DIR, 'manifest.json');
-  const indexPath = path.join(EXTENSION_DIR, 'index.html');
+const fixedFiles = fixPaths(EXTENSION_DIR);
+console.log(`  ✓ ${fixedFiles} arquivos corrigidos`);
+
+// 8. Processar index.html principal
+console.log('\n📄 Processando index.html...');
+const indexPath = path.join(EXTENSION_DIR, 'index.html');
+
+if (fs.existsSync(indexPath)) {
+  let html = fs.readFileSync(indexPath, 'utf8');
   
-  // 1. Verificar manifest
-  if (!fs.existsSync(manifestPath)) {
-    throw new Error('manifest.json não encontrado');
+  // Remover meta CSP problemático
+  html = html.replace(/<meta[^>]*Content-Security-Policy[^>]*>/gi, '');
+  
+  // Remover preload/prefetch que podem falhar
+  html = html.replace(/<link[^>]*rel=["']?(preload|prefetch|modulepreload)["']?[^>]*>/gi, '');
+  
+  // Garantir charset UTF-8
+  if (!html.includes('charset')) {
+    html = html.replace('<head>', '<head>\n    <meta charset="utf-8">');
   }
   
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  console.log('  📋 Manifest validado:', manifest.name, manifest.version);
+  // Adicionar loader script para garantir que tudo carregue
+  const loaderScript = `
+    <script>
+      // Extension Loader
+      console.log('Extensão carregando...');
+      
+      // Aguardar Next.js carregar
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          const nextRoot = document.getElementById('__next');
+          if (nextRoot && !nextRoot.children.length) {
+            console.error('Next.js não carregou - recarregando...');
+            window.location.reload();
+          }
+        }, 2000);
+      });
+    </script>
+  `;
   
-  // Verificar se tem CSP no manifest
-  if (manifest.content_security_policy) {
-    console.log('  ⚠️ ATENÇÃO: CSP encontrado no manifest:', manifest.content_security_policy);
-  } else {
-    console.log('  ✅ Manifest sem CSP (padrão será usado)');
+  if (!html.includes('Extension Loader')) {
+    html = html.replace('</body>', loaderScript + '\n</body>');
   }
   
-  // 2. Verificar HTML
-  const htmlContent = fs.readFileSync(indexPath, 'utf8');
+  fs.writeFileSync(indexPath, html);
+  console.log('  ✓ index.html processado');
+}
+
+// 9. Criar popup.html que abre index.html
+console.log('\n📱 Criando popup.html...');
+const popupHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Finesse Notifier</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 450px;
+            height: 600px;
+            overflow: hidden;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="loader" class="loading">
+        <div>
+            <p>Carregando aplicação...</p>
+            <p style="font-size: 12px; margin-top: 10px;">Aguarde alguns segundos...</p>
+        </div>
+    </div>
+    <iframe id="app" src="index.html" style="display: none;"></iframe>
+    
+    <script>
+        const iframe = document.getElementById('app');
+        const loader = document.getElementById('loader');
+        
+        iframe.onload = function() {
+            setTimeout(function() {
+                loader.style.display = 'none';
+                iframe.style.display = 'block';
+            }, 1000);
+        };
+        
+        // Fallback se não carregar
+        setTimeout(function() {
+            if (iframe.style.display === 'none') {
+                loader.innerHTML = '<button onclick="chrome.tabs.create({url: chrome.runtime.getURL(\'index.html\')})" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Abrir em Nova Aba</button>';
+            }
+        }, 5000);
+    </script>
+</body>
+</html>`;
+
+fs.writeFileSync(path.join(EXTENSION_DIR, 'popup.html'), popupHtml);
+console.log('  ✓ popup.html criado');
+
+// 10. Copiar arquivos essenciais da extensão
+console.log('\n📦 Copiando arquivos da extensão...');
+
+// Copiar manifest.json
+if (fs.existsSync('public/manifest.json')) {
+  const manifest = JSON.parse(fs.readFileSync('public/manifest.json', 'utf8'));
   
-  // Verificar scripts inline
-  const inlineScripts = htmlContent.match(/<script[^>]*>[\s\S]*?<\/script>/g) || [];
-  const inlineScriptCount = inlineScripts.filter(script => !script.includes('src=')).length;
-  
-  if (inlineScriptCount > 0) {
-    console.log('  ❌ PROBLEMA: Ainda há', inlineScriptCount, 'scripts inline');
-    inlineScripts.forEach((script, i) => {
-      if (!script.includes('src=')) {
-        console.log(`    Script inline ${i + 1}:`, script.substring(0, 100) + '...');
-      }
-    });
-  } else {
-    console.log('  ✅ Nenhum script inline encontrado');
-  }
-  
-  // Verificar referências _next
-  if (htmlContent.includes('_next/')) {
-    console.log('  ❌ PROBLEMA: Ainda há referências _next no HTML');
-  } else {
-    console.log('  ✅ Todas as referências _next foram corrigidas');
-  }
-  
-  // Verificar preload tags
-  const preloadTags = htmlContent.match(/<link[^>]*rel=['"]?preload['"]?[^>]*>/gi) || [];
-  if (preloadTags.length > 0) {
-    console.log('  ⚠️ AVISO:', preloadTags.length, 'preload tags ainda presentes');
-  } else {
-    console.log('  ✅ Nenhuma tag preload encontrada');
-  }
-  
-  // 3. Verificar arquivos essenciais
-  const requiredFiles = ['next', 'icons/icon16.png', 'background.js'];
-  for (const file of requiredFiles) {
-    const filePath = path.join(EXTENSION_DIR, file);
-    if (fs.existsSync(filePath)) {
-      console.log(`  ✅ ${file} encontrado`);
-    } else {
-      console.log(`  ❌ ${file} NÃO encontrado`);
+  // Ajustar manifest para funcionar corretamente
+  manifest.action = {
+    default_popup: "popup.html",
+    default_title: "Finesse Notifier",
+    default_icon: {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
+  };
+  
+  // Adicionar permissões necessárias
+  if (!manifest.permissions.includes('scripting')) {
+    manifest.permissions.push('scripting');
   }
   
-  // 4. Contar total de arquivos
-  const jsFiles = [];
-  const cssFiles = [];
-  findFiles(EXTENSION_DIR, ['.js'], jsFiles);
-  findFiles(EXTENSION_DIR, ['.css'], cssFiles);
+  // Configurar CSP apropriado para Next.js
+  manifest.content_security_policy = {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+  };
   
-  console.log(`  📊 Total: ${jsFiles.length} arquivos JS, ${cssFiles.length} arquivos CSS`);
+  // Recursos acessíveis
+  manifest.web_accessible_resources = [{
+    "resources": ["*"],
+    "matches": ["<all_urls>"]
+  }];
   
-  console.log('  ✅ Validação concluída');
+  fs.writeFileSync(path.join(EXTENSION_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  console.log('  ✓ manifest.json copiado e ajustado');
 }
 
-// Executar build
-if (require.main === module) {
-  buildExtension();
+// Copiar background.js
+if (fs.existsSync('public/background.js')) {
+  fs.copyFileSync('public/background.js', path.join(EXTENSION_DIR, 'background.js'));
+  console.log('  ✓ background.js copiado');
 }
 
-module.exports = { buildExtension };
+// Copiar ícones
+if (fs.existsSync('public/icons')) {
+  copyRecursive('public/icons', path.join(EXTENSION_DIR, 'icons'));
+  console.log('  ✓ Ícones copiados');
+}
+
+// 11. Criar script de correção final
+console.log('\n🔨 Aplicando correções finais...');
+const fixerScript = `
+// Corretor de paths para extensão Chrome
+(function() {
+  // Corrigir todos os links e scripts
+  document.querySelectorAll('[src], [href]').forEach(el => {
+    const attr = el.hasAttribute('src') ? 'src' : 'href';
+    let value = el.getAttribute(attr);
+    
+    if (value && value.startsWith('/')) {
+      // Remover barra inicial
+      value = value.substring(1);
+      el.setAttribute(attr, value);
+    }
+    
+    // Corrigir _next
+    if (value && value.includes('_next')) {
+      value = value.replace('_next', 'next');
+      el.setAttribute(attr, value);
+    }
+  });
+})();
+`;
+
+fs.writeFileSync(path.join(EXTENSION_DIR, 'path-fixer.js'), fixerScript);
+
+// Injetar o script no index.html
+let indexContent = fs.readFileSync(indexPath, 'utf8');
+if (!indexContent.includes('path-fixer.js')) {
+  indexContent = indexContent.replace('</head>', '<script src="path-fixer.js"></script>\n</head>');
+  fs.writeFileSync(indexPath, indexContent);
+}
+
+// 12. Validação final
+console.log('\n✅ Validando build...');
+const requiredFiles = [
+  'manifest.json',
+  'background.js', 
+  'index.html',
+  'popup.html',
+  'next'
+];
+
+let allValid = true;
+requiredFiles.forEach(file => {
+  const filePath = path.join(EXTENSION_DIR, file);
+  if (fs.existsSync(filePath)) {
+    console.log(`  ✓ ${file}`);
+  } else {
+    console.log(`  ✗ ${file} FALTANDO`);
+    allValid = false;
+  }
+});
+
+if (allValid) {
+  console.log('\n🎉 Build concluído com sucesso!');
+  console.log('\n📋 Próximos passos:');
+  console.log('1. Abra chrome://extensions/');
+  console.log('2. Ative "Modo do desenvolvedor"');
+  console.log('3. Clique em "Carregar sem compactação"');
+  console.log(`4. Selecione: ${path.resolve(EXTENSION_DIR)}`);
+  console.log('\n💡 Dica: Se a interface não carregar no popup, clique com botão direito');
+  console.log('   no ícone da extensão e selecione "Inspecionar popup" para ver erros.');
+} else {
+  console.error('\n❌ Build incompleto - verifique os arquivos faltantes');
+  process.exit(1);
+}
