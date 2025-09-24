@@ -64,43 +64,49 @@ export const useFinesse = (): UseFinesseReturn => {
 
   // Verificação de status em tempo real
   const checkAgentStatus = useCallback(async (creds?: UserCredentials, showLoading = false) => {
-    const currentCredentials = creds || credentials;
-    if (!currentCredentials) return;
+  const currentCredentials = creds || credentials;
+  if (!currentCredentials) return;
 
-    if (showLoading) setIsLoading(true);
+  if (showLoading) setIsLoading(true);
 
-    try {
-      // Verificar se deve monitorar baseado no Finesse e horários
-      const shouldMonitor = scheduleService.shouldMonitor(isFinesseOpen, scheduleSettings);
+  try {
+    // Verificar se deve monitorar baseado no Finesse e horários
+    const shouldMonitor = scheduleService.shouldMonitor(isFinesseOpen, scheduleSettings);
+    
+    if (!shouldMonitor) {
+      setIsConnected(false);
+      setError('Monitoramento pausado (fora do horário ou Finesse fechado)');
+      if (showLoading) setIsLoading(false);
+      return;
+    }
+
+    const response = await finesseService.connectApi(currentCredentials);
+    
+    if (response.success && response.data) {
+      const newStatus = response.data;
+      setAgentStatus(newStatus);
+      setIsConnected(true);
+      setError(null);
+      await storageService.saveAgentStatus(newStatus);
       
-      if (!shouldMonitor) {
-        setIsConnected(false);
-        setError('Monitoramento pausado (fora do horário ou Finesse fechado)');
-        if (showLoading) setIsLoading(false);
-        return;
+      // Verificar condições para notificações apenas se o status mudou
+      const currentReasonCode = newStatus.reasonCodeId ? newStatus.reasonCodeId.text : null;
+      const currentState = newStatus.state ? newStatus.state.text : null;
+      const statusKey = `${currentState}_${currentReasonCode}`;
+      
+      if (lastStatusRef.current !== statusKey) {
+        console.log(`Status mudou de ${lastStatusRef.current} para ${statusKey}`);
+        lastStatusRef.current = statusKey;
+        await handleStatusNotifications(newStatus);
       }
-
-      const response = await finesseService.connectApi(currentCredentials);
+    } else {
+      setIsConnected(false);
       
-      if (response.success && response.data) {
-        const newStatus = response.data;
-        setAgentStatus(newStatus);
-        setIsConnected(true);
-        setError(null);
-        await storageService.saveAgentStatus(newStatus);
-        
-        // Verificar condições para notificações apenas se o status mudou
-        const currentReasonCode = newStatus.reasonCodeId ? newStatus.reasonCodeId.text : null;
-        const currentState = newStatus.state ? newStatus.state.text : null;
-        const statusKey = `${currentState}_${currentReasonCode}`;
-        
-        if (lastStatusRef.current !== statusKey) {
-          console.log(`Status mudou de ${lastStatusRef.current} para ${statusKey}`);
-          lastStatusRef.current = statusKey;
-          await handleStatusNotifications(newStatus);
-        }
+      // Verificar se foi erro de rate limiting
+      if (response.error?.includes('Rate limit')) {
+        setError(`${response.error} - Aguardando próxima verificação automática.`);
+        console.log('Rate limit atingido - aguardando reset automático');
       } else {
-        setIsConnected(false);
         setError(response.error || 'Erro na conexão com Finesse');
         
         // Notificar sobre erro de conexão apenas se estiver monitorando
@@ -108,14 +114,15 @@ export const useFinesse = (): UseFinesseReturn => {
           await sendNotification(NotificationType.DEVICE_ERROR);
         }
       }
-    } catch (err) {
-      setIsConnected(false);
-      setError('Erro na verificação do status');
-      console.error('Erro no checkAgentStatus:', err);
     }
+  } catch (err) {
+    setIsConnected(false);
+    setError('Erro na verificação do status');
+    console.error('Erro no checkAgentStatus:', err);
+  }
 
-    if (showLoading) setIsLoading(false);
-  }, [credentials, isFinesseOpen, scheduleSettings]);
+  if (showLoading) setIsLoading(false);
+}, [credentials, isFinesseOpen, scheduleSettings]);
 
   // Gerenciamento de notificações baseado no status
   const handleStatusNotifications = async (status: FinesseApiResponse) => {

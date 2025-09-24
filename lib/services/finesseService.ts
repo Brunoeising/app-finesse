@@ -1,6 +1,7 @@
 // lib/services/finesseService.ts
 import { FinesseApiResponse, UserCredentials, ApiResponse } from '@/types/finesse';
 import { DEFAULT_REASON_CODES, getReasonCodesWithFallback } from '@/lib/constants/reasonCodes';
+import { rateLimitService } from './rateLimitService';
 
 interface ReasonCode {
   id: { text: string };
@@ -25,6 +26,22 @@ class FinesseService {
     if (!this.baseUrl || !this.fallbackUrl) {
       throw new Error('URLs do Finesse não configuradas nas variáveis de ambiente');
     }
+  }
+
+    private async makeRequestWithRateLimit(
+    url: string,
+    options: RequestInit,
+    userId: string,
+    endpoint: string = 'api'
+  ): Promise<Response> {
+    // Verificar rate limit
+    if (!rateLimitService.checkLimit(userId, endpoint)) {
+      const stats = rateLimitService.getStats(userId, endpoint);
+      throw new Error(`Rate limit excedido. Tente novamente em ${stats.resetIn} segundos.`);
+    }
+
+    // Fazer a requisição normal
+    return this.makeRequest(url, options);
   }
 
   /**
@@ -179,7 +196,6 @@ class FinesseService {
    * Conecta com a API do Finesse
    */
   async connectApi(credentials: UserCredentials): Promise<ApiResponse<FinesseApiResponse>> {
-    // Validar credenciais primeiro
     const validation = this.validateCredentials(credentials);
     if (!validation.valid) {
       return {
@@ -190,16 +206,27 @@ class FinesseService {
 
     const { username, password, agentId } = credentials;
     const authHeader = this.createAuthHeader(username, password);
+    const userId = `${username}:${agentId}`;
 
     console.log('Tentando conectar com Finesse...');
 
     // Tentar servidor principal primeiro
-    let response = await this.tryConnection(this.baseUrl, agentId, authHeader);
+    let response = await this.tryConnectionWithRateLimit(
+      this.baseUrl, 
+      agentId, 
+      authHeader, 
+      userId
+    );
     
     // Se falhou, tentar servidor de fallback
     if (!response.success && this.fallbackUrl !== this.baseUrl) {
       console.log('Tentando servidor de fallback...');
-      response = await this.tryConnection(this.fallbackUrl, agentId, authHeader);
+      response = await this.tryConnectionWithRateLimit(
+        this.fallbackUrl, 
+        agentId, 
+        authHeader, 
+        userId
+      );
     }
 
     return response;
@@ -208,26 +235,26 @@ class FinesseService {
   /**
    * Tenta conexão com um servidor específico
    */
-  private async tryConnection(
+   private async tryConnectionWithRateLimit(
     baseUrl: string, 
     agentId: string, 
-    authHeader: string
+    authHeader: string,
+    userId: string
   ): Promise<ApiResponse<FinesseApiResponse>> {
     try {
-      // IMPORTANTE: Remover pontos do Agent ID para a URL
       const cleanAgentId = agentId.replace(/\./g, '');
       const url = `${baseUrl}/User/${cleanAgentId}/`;
       
       console.log(`Conectando com: ${url}`);
 
-      const response = await this.makeRequest(url, {
+      // Usar rate limiting
+      const response = await this.makeRequestWithRateLimit(url, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${authHeader}`,
           'Accept': 'application/xml',
-          // REMOVIDO: Content-Type não deve ser usado em requisições GET
         },
-      });
+      }, userId, 'user-status');
 
       console.log(`Status da resposta: ${response.status}`);
 
@@ -249,11 +276,8 @@ class FinesseService {
         return { success: false, error: 'Resposta vazia do servidor' };
       }
 
-      console.log('XML recebido:', xmlData.substring(0, 200) + '...');
-
       const finesse = this.parseXmlToJson(xmlData);
 
-      // Verificar se a resposta contém erro
       if (finesse.ApiErrors) {
         return {
           success: false,
@@ -261,11 +285,16 @@ class FinesseService {
         };
       }
 
-      console.log('Conexão bem-sucedida!');
       return { success: true, data: finesse };
 
     } catch (error) {
       console.error('Erro na conexão com Finesse:', error);
+      
+      // Se foi erro de rate limiting, propagar a mensagem específica
+      if (error instanceof Error && error.message.includes('Rate limit')) {
+        return { success: false, error: error.message };
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro de conexão'
@@ -288,6 +317,7 @@ class FinesseService {
 
     const { username, password, agentId } = credentials;
     const authHeader = this.createAuthHeader(username, password);
+    const userId = `${username}:${agentId}`;
 
     // Construir XML do estado
     let stateXml: string;
@@ -300,39 +330,52 @@ class FinesseService {
     }
 
     // Tentar servidor principal primeiro
-    let response = await this.tryStateChange(this.baseUrl, agentId, authHeader, stateXml);
+    let response = await this.tryStateChangeWithRateLimit(
+      this.baseUrl, 
+      agentId, 
+      authHeader, 
+      stateXml, 
+      userId
+    );
     
     // Se falhou, tentar servidor de fallback
     if (!response.success && this.fallbackUrl !== this.baseUrl) {
-      response = await this.tryStateChange(this.fallbackUrl, agentId, authHeader, stateXml);
+      response = await this.tryStateChangeWithRateLimit(
+        this.fallbackUrl, 
+        agentId, 
+        authHeader, 
+        stateXml, 
+        userId
+      );
     }
 
     return response;
   }
 
+
   /**
    * Tenta mudança de estado em um servidor específico
    */
-  private async tryStateChange(
+    private async tryStateChangeWithRateLimit(
     baseUrl: string,
     agentId: string,
     authHeader: string,
-    stateXml: string
+    stateXml: string,
+    userId: string
   ): Promise<ApiResponse<any>> {
     try {
-      // IMPORTANTE: Remover pontos do Agent ID para a URL
       const cleanAgentId = agentId.replace(/\./g, '');
       const url = `${baseUrl}/User/${cleanAgentId}/`;
 
-      const response = await this.makeRequest(url, {
+      const response = await this.makeRequestWithRateLimit(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${authHeader}`,
-          'Content-Type': 'application/xml', // Content-Type é apropriado para PUT/POST
+          'Content-Type': 'application/xml',
           'Accept': 'application/xml',
         },
         body: stateXml,
-      });
+      }, userId, 'state-change');
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -358,6 +401,11 @@ class FinesseService {
 
     } catch (error) {
       console.error('Erro na alteração do estado:', error);
+      
+      if (error instanceof Error && error.message.includes('Rate limit')) {
+        return { success: false, error: error.message };
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro de conexão'
@@ -366,7 +414,7 @@ class FinesseService {
   }
 
   /**
-   * Obtém códigos de motivo
+   * Códigos de motivo com rate limiting
    */
   async getReasonCodes(credentials: UserCredentials): Promise<ApiResponse<ReasonCode[]>> {
     const validation = this.validateCredentials(credentials);
@@ -374,21 +422,19 @@ class FinesseService {
       return { success: false, error: validation.error };
     }
 
-    console.log('Tentando obter códigos de motivo...');
-
-    const { username, password } = credentials;
+    const { username, password, agentId } = credentials;
     const authHeader = this.createAuthHeader(username, password);
+    const userId = `${username}:${agentId}`;
 
     // Tentar servidor principal primeiro
-    let response = await this.tryGetReasonCodes(this.baseUrl, authHeader);
+    let response = await this.tryGetReasonCodesWithRateLimit(this.baseUrl, authHeader, userId);
     
     // Se falhou, tentar servidor de fallback
     if (!response.success && this.fallbackUrl !== this.baseUrl) {
-      console.log('Tentando códigos de motivo no servidor de fallback...');
-      response = await this.tryGetReasonCodes(this.fallbackUrl, authHeader);
+      response = await this.tryGetReasonCodesWithRateLimit(this.fallbackUrl, authHeader, userId);
     }
 
-    // Se ambos falharam (CORS/403), usar códigos padrão
+    // Se ambos falharam, usar códigos padrão
     if (!response.success) {
       console.log('API falhou - usando códigos de motivo padrão');
       return {
@@ -401,23 +447,23 @@ class FinesseService {
   }
 
   /**
-   * Tenta obter códigos de motivo de um servidor específico
+   * Códigos de motivo com rate limiting
    */
-  private async tryGetReasonCodes(
+  private async tryGetReasonCodesWithRateLimit(
     baseUrl: string,
-    authHeader: string
+    authHeader: string,
+    userId: string
   ): Promise<ApiResponse<ReasonCode[]>> {
     try {
       const url = `${baseUrl}/ReasonCodes?category=NOT_READY`;
 
-      const response = await this.makeRequest(url, {
+      const response = await this.makeRequestWithRateLimit(url, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${authHeader}`,
           'Accept': 'application/xml',
-          // REMOVIDO: Content-Type não deve ser usado em GET
         },
-      });
+      }, userId, 'reason-codes');
 
       if (!response.ok) {
         return {
@@ -436,7 +482,6 @@ class FinesseService {
         };
       }
 
-      // Processar códigos de motivo
       let codes: ReasonCode[] = [];
       if (reasonCodes.ReasonCodes?.ReasonCode) {
         const rawCodes = Array.isArray(reasonCodes.ReasonCodes.ReasonCode) 
@@ -453,7 +498,10 @@ class FinesseService {
       return { success: true, data: codes };
 
     } catch (error) {
-      console.error('Erro ao buscar códigos de motivo:', error);
+      if (error instanceof Error && error.message.includes('Rate limit')) {
+        return { success: false, error: error.message };
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro de conexão'
