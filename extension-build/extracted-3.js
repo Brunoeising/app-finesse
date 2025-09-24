@@ -1,2 +1,2 @@
 // Extracted script 3
-self.__next_f.push([1,"2:I[5751,[],\"\"]\n4:I[6513,[],\"ClientPageRoot\"]\n5:I[4514,[\"447\",\"static/chunks/447-8542df257fc170e3.js\",\"931\",\"static/chunks/app/page-247c8864a223d747.js\"],\"default\"]\n6:I[9275,[],\"\"]\n7:I[1343,[],\"\"]\n9:I[6130,[],\"\"]\na:[]\n"])
+self.__next_f.push([1,"2:I[5751,[],\"\"]\n4:I[6513,[],\"ClientPageRoot\"]\n5:I[2624,[\"447\",\"static/chunks/447-8542df257fc170e3.js\",\"931\",\"static/chunks/app/page-1e59f64fd392ea42.js\"],\"default\"]\n6:I[9275,[],\"\"]\n7:I[1343,[],\"\"]\n9:I[6130,[],\"\"]\na:[]\n"])
