@@ -149,7 +149,6 @@ A extensão solicitará as seguintes permissões:
     ├── package.json                 # Dependencies e scripts
     ├── tailwind.config.js           # Configuração Tailwind
     └── tsconfig.json                # Configuração TypeScript
-<img width="1522" height="685" alt="image" src="https://github.com/user-attachments/assets/ff543e7d-a1e2-42fc-a908-520f7b66f7ec" />
 
 ## 🔄 Migração da Versão Anterior
 
