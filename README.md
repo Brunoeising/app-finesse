@@ -149,7 +149,7 @@ A extensão solicitará as seguintes permissões:
     ├── package.json                 # Dependencies e scripts
     ├── tailwind.config.js           # Configuração Tailwind
     └── tsconfig.json                # Configuração TypeScript
-<img width="3840" height="1731" alt="Untitled diagram _ Mermaid Chart-2025-09-24-195135 (1)" src="https://github.com/user-attachments/assets/b7de0645-deb2-4cb1-87a0-ccb9cb311f27" />
+<img width="1522" height="685" alt="image" src="https://github.com/user-attachments/assets/ff543e7d-a1e2-42fc-a908-520f7b66f7ec" />
 
 ## 🔄 Migração da Versão Anterior
 
