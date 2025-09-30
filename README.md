@@ -32,7 +32,7 @@ Uma versão moderna e melhorada da extensão Finesse Notifier, construída com *
 ### 1. Clone o repositório
 ```bash
 git clone <repository-url>
-cd finesse-notifier-nextjs
+cd app-finesse
 ```
 
 ### 2. Instale as dependências
