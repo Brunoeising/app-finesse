@@ -90,37 +90,66 @@ A extensão solicitará as seguintes permissões:
 ## 📁 Estrutura do Projeto
 
 ```
-finesse-notifier-nextjs/
-├── components/           # Componentes React
-│   ├── LoginForm.tsx
-│   ├── AgentStatus.tsx
-│   ├── StateChanger.tsx
-│   ├── TimerSettings.tsx
-│   ├── NotificationConfig.tsx
-│   └── Header.tsx
-├── hooks/               # Hooks personalizados
-│   └── useFinesse.ts
-├── lib/                 # Serviços e utilitários
-│   └── services/
-│       ├── finesseService.ts
-│       ├── notificationService.ts
-│       └── storageService.ts
-├── types/               # Definições TypeScript
-│   ├── finesse.ts
-│   ├── chrome.ts
-│   └── notifications.ts
-├── pages/               # Páginas Next.js
-│   ├── index.tsx
-│   ├── _app.tsx
-│   └── _document.tsx
-├── styles/              # Estilos
-│   └── globals.css
-├── public/              # Assets públicos
-│   ├── manifest.json
-│   ├── background.js
-│   └── icons/
-└── next.config.js
-```
+/opt/app-finesse/
+├── 📱 app/                          # Next.js App Router
+│   ├── favicon.ico
+│   ├── globals.css                  # Estilos globais + Tailwind
+│   ├── layout.tsx                   # Layout principal da aplicação
+│   └── page.tsx                     # Página principal (Main App)
+│
+├── 🎨 components/                   # Componentes React reutilizáveis
+│   ├── AgentStatus.tsx              # Status atual do agente
+│   ├── Header.tsx                   # Cabeçalho com navegação
+│   ├── LoginForm.tsx                # Formulário de autenticação
+│   ├── NotificationConfig.tsx       # Configurações de notificação
+│   ├── ScheduleConfig.tsx           # Configuração de horários
+│   ├── StateChanger.tsx             # Mudança de estado do agente
+│   └── TimerSettings.tsx            # Configurações de timers
+│
+├── 🔄 hooks/                        # Custom React Hooks
+│   ├── useFinesse.ts                # Hook principal (lógica de negócio)
+│   └── useLocalStorage.ts           # Helper para localStorage
+│
+├── ⚙️ lib/                          # Bibliotecas e utilitários
+│   ├── 📊 constants/
+│   │   └── reasonCodes.ts           # Códigos de motivo padrão
+│   │
+│   └── 🛠️ services/                 # Serviços de negócio
+│       ├── encryptionService.ts     # Criptografia AES-256 + SHA-256
+│       ├── finesseDetectorService.ts # Detecção de abas do Finesse
+│       ├── finesseService.ts        # Comunicação com API Finesse
+│       ├── notificationService.ts   # Sistema multi-canal de notificações
+│       ├── rateLimitService.ts      # Controle de taxa de requisições
+│       ├── scheduleService.ts       # Lógica de horários de trabalho
+│       └── storageService.ts        # Armazenamento seguro de dados
+│
+├── 🏷️ types/                        # Definições TypeScript
+│   ├── chrome.ts                    # Tipos para Chrome Extension
+│   ├── finesse.ts                   # Tipos da API Finesse
+│   └── notifications.ts             # Tipos do sistema de notificações
+│
+├── 🌐 public/                       # Arquivos estáticos
+│   ├── 🎨 icons/                    # Ícones da extensão Chrome
+│   ├── background.js                # Service Worker da extensão
+│   ├── manifest.json                # Manifest da extensão Chrome
+│   └── *.svg                        # Ícones diversos
+│
+├── 🚀 scripts/                      # Scripts de build e deploy
+│   ├── build-extension.js           # Build para Chrome Extension
+│   └── extension-loader.js          # Loader da extensão
+│
+├── 📦 Build Outputs/
+│   ├── extension-build/             # Extensão Chrome compilada
+│   ├── out/                         # Build estático Next.js
+│   └── node_modules/                # Dependências
+│
+└── ⚙️ Configurações/
+    ├── .env.local                   # Variáveis de ambiente
+    ├── next.config.js               # Configuração Next.js
+    ├── package.json                 # Dependencies e scripts
+    ├── tailwind.config.js           # Configuração Tailwind
+    └── tsconfig.json                # Configuração TypeScript
+<img width="3840" height="1731" alt="Untitled diagram _ Mermaid Chart-2025-09-24-195135 (1)" src="https://github.com/user-attachments/assets/b7de0645-deb2-4cb1-87a0-ccb9cb311f27" />
 
 ## 🔄 Migração da Versão Anterior
 
